@@ -1,0 +1,19 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @media (prefers-color-scheme: light) {
+      .bg { fill: #1db954; }
+      .fg { fill: #191414; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #191414; }
+      .fg { fill: #1db954; }
+    }
+  </style>
+  <g>
+    <circle class="bg" cx="90" cy="90" r="80" />
+    <circle class="fg" cx="70" cy="122" r="18" />
+    <rect class="fg" x="84" y="40" width="10" height="82" />
+    <rect class="fg" x="84" y="40" width="50" height="18" />
+    <path class="fg" d="M134 58 L150 70 L145 78 L129 66 Z" />
+  </g>
+</svg>
