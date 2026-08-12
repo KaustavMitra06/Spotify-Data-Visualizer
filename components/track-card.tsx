@@ -1,8 +1,10 @@
 "use client"
 
+import type { MouseEvent } from "react"
 import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { Play, Clock } from "lucide-react"
+import { ExternalLink, Play, Clock } from "lucide-react"
 
 interface TrackCardProps {
   track: {
@@ -16,7 +18,7 @@ interface TrackCardProps {
     duration_ms: number
     popularity: number
     preview_url?: string
-    external_urls: { spotify: string }
+    external_urls?: { spotify?: string }
   }
   rank?: number
   showDuration?: boolean
@@ -30,6 +32,13 @@ function formatDuration(ms: number) {
 }
 
 export function TrackCard({ track, rank, showDuration = true, onClick }: TrackCardProps) {
+  const openSpotify = (event: MouseEvent) => {
+    event.stopPropagation()
+    if (track.external_urls?.spotify) {
+      window.open(track.external_urls.spotify, "_blank", "noopener,noreferrer")
+    }
+  }
+
   return (
     <Card
       className={cn(
@@ -61,14 +70,38 @@ export function TrackCard({ track, rank, showDuration = true, onClick }: TrackCa
           </div>
         </div>
       </div>
-      <div className="p-4">
+      <div className="p-4 space-y-3">
         <h3 className="font-semibold text-card-foreground truncate">{track.name}</h3>
         <p className="text-sm text-muted-foreground truncate">{track.artists?.map((a) => a.name).join(", ")}</p>
-        {showDuration && (
-          <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-            <Clock className="w-3 h-3" />
-            <span>{formatDuration(track.duration_ms)}</span>
-          </div>
+        <div className="flex items-center justify-between gap-2">
+          {showDuration && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              <span>{formatDuration(track.duration_ms)}</span>
+            </div>
+          )}
+          {track.external_urls?.spotify && (
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={openSpotify}
+              aria-label={`Open ${track.name} in Spotify`}
+              title="Open in Spotify"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
+        {track.preview_url && (
+          <audio
+            controls
+            preload="none"
+            className="w-full h-8"
+            onClick={(event) => event.stopPropagation()}
+            src={track.preview_url}
+          />
         )}
       </div>
     </Card>

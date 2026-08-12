@@ -1,7 +1,9 @@
 "use client"
 
+import type { MouseEvent } from "react"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { Play, Clock } from "lucide-react"
+import { ExternalLink, Play, Clock } from "lucide-react"
 
 interface TrackRowProps {
   track: {
@@ -13,6 +15,8 @@ interface TrackRowProps {
     }
     artists: { name: string; id: string }[]
     duration_ms: number
+    preview_url?: string
+    external_urls?: { spotify?: string }
   }
   index: number
   playedAt?: string
@@ -40,6 +44,13 @@ function formatPlayedAt(dateString: string) {
 }
 
 export function TrackRow({ track, index, playedAt, onClick }: TrackRowProps) {
+  const openSpotify = (event: MouseEvent) => {
+    event.stopPropagation()
+    if (track.external_urls?.spotify) {
+      window.open(track.external_urls.spotify, "_blank", "noopener,noreferrer")
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -83,6 +94,31 @@ export function TrackRow({ track, index, playedAt, onClick }: TrackRowProps) {
           {formatDuration(track.duration_ms)}
         </div>
       )}
+
+      <div className="flex items-center gap-2">
+        {track.preview_url && (
+          <audio
+            controls
+            preload="none"
+            className="hidden lg:block w-32 h-8"
+            onClick={(event) => event.stopPropagation()}
+            src={track.preview_url}
+          />
+        )}
+        {track.external_urls?.spotify && (
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={openSpotify}
+            aria-label={`Open ${track.name} in Spotify`}
+            title="Open in Spotify"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

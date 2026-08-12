@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 import { getCurrentUser } from "@/lib/spotify"
+import { isDemoMode, setDemoMode } from "@/lib/demo-mode"
 
 interface SpotifyUser {
   id: string
@@ -40,35 +41,30 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    // A `?demo=1` link (e.g. from a resume) drops straight into demo mode.
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get("demo") === "1") {
+        setDemoMode(true)
+      }
+    }
     fetchUser().finally(() => setIsLoading(false))
   }, [fetchUser])
 
   const login = useCallback(() => {
-    const width = 520
-    const height = 720
-    const left = window.screenX + (window.outerWidth - width) / 2
-    const top = window.screenY + (window.outerHeight - height) / 2
-    const popup = window.open(
-      "/api/auth/login?popup=1",
-      "spotify-login",
-      `width=${width},height=${height},left=${left},top=${top}`,
-    )
-
-    if (!popup) {
-      window.location.href = "/api/auth/login"
-      return
-    }
-
-    popup.focus()
-    const timer = window.setInterval(() => {
-      if (popup.closed) {
-        window.clearInterval(timer)
-        fetchUser().finally(() => setIsLoading(false))
-      }
-    }, 500)
-  }, [fetchUser])
+    // Leaving the demo to connect a real account.
+    setDemoMode(false)
+    window.location.href = "/api/auth/login"
+  }, [])
 
   const logout = useCallback(() => {
+    if (isDemoMode()) {
+      setDemoMode(false)
+      setToken(null)
+      setUser(null)
+      window.location.href = "/"
+      return
+    }
     fetch("/api/auth/logout", { method: "POST" }).catch(() => {})
     setToken(null)
     setUser(null)

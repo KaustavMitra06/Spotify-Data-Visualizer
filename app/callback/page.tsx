@@ -8,7 +8,14 @@ export default function CallbackPage() {
     const isPopup = params.get("popup") === "1"
     if (isPopup) {
       if (window.opener && !window.opener.closed) {
-        window.opener.location.replace("/dashboard")
+        window.opener.postMessage(
+          {
+            type: "spotify-auth-complete",
+            origin: window.location.origin,
+          },
+          "*",
+        )
+        window.opener.location.replace(`${window.location.origin}/dashboard`)
       }
       window.close()
       return

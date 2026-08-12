@@ -40,6 +40,11 @@ function assertSpotifyEnv() {
   }
 }
 
+export function getSpotifyRedirectUrl() {
+  assertSpotifyEnv()
+  return new URL(SPOTIFY_REDIRECT_URI!)
+}
+
 function basicAuthHeader() {
   assertSpotifyEnv()
   const credentials = `${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`

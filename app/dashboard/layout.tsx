@@ -2,6 +2,7 @@
 
 import { SpotifyProvider, useSpotify } from "@/components/spotify-provider"
 import { DashboardNav } from "@/components/dashboard-nav"
+import { DemoBanner } from "@/components/demo-banner"
 import { useRouter } from "next/navigation"
 import { useEffect, type ReactNode } from "react"
 
@@ -30,7 +31,10 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <DashboardNav />
-      <main className="ml-64 p-8">{children}</main>
+      <main className="ml-64 p-8">
+        <DemoBanner />
+        {children}
+      </main>
     </div>
   )
 }

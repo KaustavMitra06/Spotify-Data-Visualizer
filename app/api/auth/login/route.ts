@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { buildSpotifyAuthUrl, setAuthPopupCookie, setAuthStateCookie } from "@/lib/spotify-server"
+import {
+  buildSpotifyAuthUrl,
+  getSpotifyRedirectUrl,
+  setAuthPopupCookie,
+  setAuthStateCookie,
+} from "@/lib/spotify-server"
 
 export const runtime = "nodejs"
 
@@ -8,11 +13,18 @@ function createState() {
 }
 
 export async function GET(request: Request) {
+  const url = new URL(request.url)
+  const redirectUrl = getSpotifyRedirectUrl()
+  const requestHost = request.headers.get("host")
+
+  if (requestHost && requestHost !== redirectUrl.host) {
+    return NextResponse.redirect(new URL(`${url.pathname}${url.search}`, redirectUrl.origin))
+  }
+
   const state = createState()
   const authUrl = buildSpotifyAuthUrl(state)
   const response = NextResponse.redirect(authUrl)
   setAuthStateCookie(response, state)
-  const url = new URL(request.url)
   const popup = url.searchParams.get("popup")
   if (popup === "1") {
     setAuthPopupCookie(response, "1")

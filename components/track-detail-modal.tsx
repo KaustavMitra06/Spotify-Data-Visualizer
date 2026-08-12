@@ -30,15 +30,26 @@ export function TrackDetailModal({ trackId, onClose }: TrackDetailModalProps) {
   const [track, setTrack] = useState<any>(null)
   const [features, setFeatures] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [featuresUnavailable, setFeaturesUnavailable] = useState(false)
 
   useEffect(() => {
     if (!trackId || !token) return
 
     setLoading(true)
-    Promise.all([getTrack(token, trackId), getAudioFeatures(token, [trackId])])
-      .then(([trackData, featuresData]) => {
+    setTrack(null)
+    setFeatures(null)
+    setFeaturesUnavailable(false)
+
+    getTrack(token, trackId)
+      .then(async (trackData) => {
         setTrack(trackData)
-        setFeatures(featuresData.audio_features?.[0])
+        try {
+          const featuresData = await getAudioFeatures(token, [trackId])
+          setFeatures(featuresData.audio_features?.[0] ?? null)
+        } catch (error) {
+          console.warn("Audio features unavailable for this track.", error)
+          setFeaturesUnavailable(true)
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -54,7 +65,7 @@ export function TrackDetailModal({ trackId, onClose }: TrackDetailModalProps) {
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary"></div>
           </div>
-        ) : track && features ? (
+        ) : track ? (
           <>
             <DialogHeader>
               <div className="flex gap-6">
@@ -97,35 +108,41 @@ export function TrackDetailModal({ trackId, onClose }: TrackDetailModalProps) {
               </div>
             </DialogHeader>
 
-            <div className="mt-6 grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="font-semibold mb-4 text-foreground">Audio Features</h3>
-                <AudioFeaturesChart features={features} />
-              </div>
-              <div className="space-y-4">
-                <h3 className="font-semibold text-foreground">Track Analysis</h3>
-                <AudioFeatureBar label="Danceability" value={features.danceability} />
-                <AudioFeatureBar label="Energy" value={features.energy} color="bg-chart-3" />
-                <AudioFeatureBar label="Valence (Happiness)" value={features.valence} color="bg-chart-4" />
-                <AudioFeatureBar label="Acousticness" value={features.acousticness} color="bg-chart-2" />
-                <AudioFeatureBar label="Instrumentalness" value={features.instrumentalness} color="bg-chart-5" />
+            {features ? (
+              <div className="mt-6 grid md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-semibold mb-4 text-foreground">Audio Features</h3>
+                  <AudioFeaturesChart features={features} />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-foreground">Track Analysis</h3>
+                  <AudioFeatureBar label="Danceability" value={features.danceability} />
+                  <AudioFeatureBar label="Energy" value={features.energy} color="bg-chart-3" />
+                  <AudioFeatureBar label="Valence (Happiness)" value={features.valence} color="bg-chart-4" />
+                  <AudioFeatureBar label="Acousticness" value={features.acousticness} color="bg-chart-2" />
+                  <AudioFeatureBar label="Instrumentalness" value={features.instrumentalness} color="bg-chart-5" />
 
-                <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-border">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-foreground">{Math.round(features.tempo)}</p>
-                    <p className="text-xs text-muted-foreground">BPM</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-foreground">{getKeyName(features.key)}</p>
-                    <p className="text-xs text-muted-foreground">{features.mode === 1 ? "Major" : "Minor"}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-foreground">{features.time_signature}/4</p>
-                    <p className="text-xs text-muted-foreground">Time Sig</p>
+                  <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-border">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-foreground">{Math.round(features.tempo)}</p>
+                      <p className="text-xs text-muted-foreground">BPM</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-foreground">{getKeyName(features.key)}</p>
+                      <p className="text-xs text-muted-foreground">{features.mode === 1 ? "Major" : "Minor"}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-foreground">{features.time_signature}/4</p>
+                      <p className="text-xs text-muted-foreground">Time Sig</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            ) : featuresUnavailable ? (
+              <div className="mt-6 rounded-md border border-border bg-secondary/40 p-4 text-sm text-muted-foreground">
+                Spotify did not allow audio analysis for this track, but the song link and metadata are still available.
+              </div>
+            ) : null}
           </>
         ) : null}
       </DialogContent>

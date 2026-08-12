@@ -30,6 +30,14 @@ async function proxy(request: Request, pathSegments: string[]) {
 
   const res = await fetch(upstreamUrl, init)
   const body = await res.text()
+  if (!res.ok) {
+    console.error(
+      "[spotify-proxy]",
+      res.status,
+      upstreamUrl,
+      body.length > 500 ? `${body.slice(0, 500)}...` : body,
+    )
+  }
   const response = new NextResponse(body, {
     status: res.status,
     headers: {

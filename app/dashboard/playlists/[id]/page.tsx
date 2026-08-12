@@ -2,32 +2,98 @@
 
 import { useEffect, useState, use } from "react"
 import { useSpotify } from "@/components/spotify-provider"
-import { getPlaylistTracks, getRecommendations, createPlaylist, addTracksToPlaylist } from "@/lib/spotify"
+import {
+  getPlaylist,
+  getPlaylistWithItems,
+  getPlaylistTracksPage,
+  getRecommendations,
+  createPlaylist,
+  addTracksToPlaylist,
+} from "@/lib/spotify"
 import { TrackRow } from "@/components/track-row"
 import { TrackDetailModal } from "@/components/track-detail-modal"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Sparkles, Plus, Check } from "lucide-react"
+import { ArrowLeft, Sparkles, Plus, Check, ExternalLink } from "lucide-react"
 import Link from "next/link"
 
 export default function PlaylistDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const { token, user } = useSpotify()
+  const [playlist, setPlaylist] = useState<any>(null)
   const [tracks, setTracks] = useState<any[]>([])
   const [recommendations, setRecommendations] = useState<any[]>([])
   const [selectedTrack, setSelectedTrack] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [loadingRecs, setLoadingRecs] = useState(false)
   const [showRecs, setShowRecs] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const spotifyPlaylistUrl = playlist?.external_urls?.spotify || `https://open.spotify.com/playlist/${id}`
+  const spotifyEmbedUrl = `https://open.spotify.com/embed/playlist/${id}`
+
+  const loadPlaylistTrackPages = async () => {
+    const pageSize = 100
+    const firstPage = await getPlaylistTracksPage(token!, id, 0, pageSize)
+    const allItems = [...(firstPage.items || [])]
+    const total = typeof firstPage.total === "number" ? firstPage.total : allItems.length
+
+    for (let offset = pageSize; offset < total; offset += pageSize) {
+      const page = await getPlaylistTracksPage(token!, id, offset, pageSize)
+      allItems.push(...(page.items || []))
+      if (!page.next) break
+    }
+
+    return allItems
+  }
 
   useEffect(() => {
     if (!token) return
 
-    getPlaylistTracks(token, id)
-      .then((data) => setTracks(data.items || []))
-      .catch(console.error)
+    setLoading(true)
+    setError(null)
+    getPlaylistWithItems(token, id)
+      .then(async (playlistData) => {
+        setPlaylist(playlistData)
+        const pagedItems = await loadPlaylistTrackPages()
+        setTracks(pagedItems)
+
+        const total = typeof playlistData?.tracks?.total === "number" ? playlistData.tracks.total : pagedItems.length
+        if (pagedItems.length === 0 && total > 0) {
+          setError("Spotify says this playlist has tracks, but did not return the track list for this app.")
+        }
+      })
+      .catch(async (err) => {
+        const status = (err as Error & { status?: number }).status
+        if (status === 403) {
+          try {
+            const playlistData = await getPlaylistWithItems(token, id)
+            setPlaylist(playlistData)
+          } catch {}
+          setError("Spotify blocked this app from reading the playlist track list. You can still inspect it in Spotify below.")
+          return
+        }
+        try {
+          const pagedItems = await loadPlaylistTrackPages()
+          setTracks(pagedItems)
+        } catch (inner) {
+          const innerStatus = (inner as Error & { status?: number }).status
+          if (innerStatus === 403) {
+            setError("Spotify blocked this app from reading the playlist track list. You can still inspect it in Spotify below.")
+            return
+          }
+          console.error(inner)
+          setError("Could not load playlist tracks.")
+          return
+        }
+        if (!playlist) {
+          try {
+            const playlistData = await getPlaylist(token, id, "name,tracks.total")
+            setPlaylist(playlistData)
+          } catch {}
+        }
+      })
       .finally(() => setLoading(false))
   }, [token, id])
 
@@ -77,8 +143,10 @@ export default function PlaylistDetailPage({ params }: { params: Promise<{ id: s
           </Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold text-foreground">Playlist Tracks</h1>
-          <p className="text-muted-foreground">{tracks.length} tracks</p>
+          <h1 className="text-3xl font-bold text-foreground">{playlist?.name || "Playlist Tracks"}</h1>
+          <p className="text-muted-foreground">
+            {typeof playlist?.tracks?.total === "number" ? playlist.tracks.total : tracks.length} tracks
+          </p>
         </div>
         <Button
           onClick={handleGetRecommendations}
@@ -87,6 +155,14 @@ export default function PlaylistDetailPage({ params }: { params: Promise<{ id: s
         >
           <Sparkles className="w-4 h-4 mr-2" />
           Get Recommendations
+        </Button>
+        <Button
+          variant="outline"
+          className="bg-transparent"
+          onClick={() => window.open(spotifyPlaylistUrl, "_blank", "noopener,noreferrer")}
+        >
+          <ExternalLink className="w-4 h-4 mr-2" />
+          Open in Spotify
         </Button>
       </div>
 
@@ -101,16 +177,45 @@ export default function PlaylistDetailPage({ params }: { params: Promise<{ id: s
               <h2 className="font-semibold text-card-foreground">Playlist Tracks</h2>
             </div>
             <div className="p-2 max-h-[600px] overflow-y-auto">
-              {tracks.map(
-                (item, i) =>
-                  item.track && (
+              {error ? (
+                <div className="space-y-4 p-4">
+                  <div className="text-sm text-muted-foreground">{error}</div>
+                  <iframe
+                    title={`${playlist?.name || "Spotify playlist"} embed`}
+                    src={spotifyEmbedUrl}
+                    width="100%"
+                    height="380"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy"
+                    className="rounded-md border-0"
+                  />
+                </div>
+              ) : tracks.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground">No tracks found in this playlist.</div>
+              ) : (
+                tracks.map((item, i) =>
+                  item.track ? (
                     <TrackRow
                       key={`${item.track.id}-${i}`}
                       track={item.track}
                       index={i + 1}
                       onClick={() => setSelectedTrack(item.track.id)}
                     />
+                  ) : (
+                    <div
+                      key={`unavailable-${i}`}
+                      className="flex items-center gap-4 p-3 rounded-lg text-sm text-muted-foreground"
+                    >
+                      <div className="w-8 text-center">{i + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-foreground">Unavailable track</div>
+                        <div className="text-xs text-muted-foreground">
+                          This item may be a local file or no longer available on Spotify.
+                        </div>
+                      </div>
+                    </div>
                   ),
+                )
               )}
             </div>
           </Card>
