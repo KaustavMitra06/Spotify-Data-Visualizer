@@ -279,6 +279,96 @@ function recommendationsResponse(limit: number) {
 }
 
 /* ----------------------------------------------------------------------- */
+/* demo recommendation assistant                                            */
+/* ----------------------------------------------------------------------- */
+/* Stands in for the LLM route while in guest mode: picks tracks from the   */
+/* sample catalog by matching the prompt to each track's audio features, so */
+/* the assistant returns real, mood-aware results with no API key.          */
+
+type Mood = { keys: string[]; label: string; target: Record<string, number> }
+
+const MOODS: Mood[] = [
+  { keys: ["chill", "relax", "calm", "study", "focus", "sleep", "late night", "wind down", "mellow", "coffee", "quiet"],
+    label: "laid-back", target: { energy: 0.25, danceability: 0.45, valence: 0.45, acousticness: 0.6 } },
+  { keys: ["upbeat", "party", "gym", "workout", "energy", "energetic", "hype", "dance", "pump", "run", "drive", "fast"],
+    label: "high-energy", target: { energy: 0.9, danceability: 0.85, valence: 0.7 } },
+  { keys: ["happy", "feel good", "feel-good", "sunny", "good mood", "joy", "bright", "summer"],
+    label: "feel-good", target: { valence: 0.9, energy: 0.6, danceability: 0.65 } },
+  { keys: ["sad", "moody", "melancholy", "rainy", "heartbreak", "cry", "emotional", "lonely", "blue"],
+    label: "moody", target: { valence: 0.2, energy: 0.35, acousticness: 0.6 } },
+  { keys: ["instrumental", "background", "no vocals", "concentrate", "deep work"],
+    label: "instrumental-leaning", target: { instrumentalness: 0.5, speechiness: 0.05, energy: 0.4 } },
+]
+
+function detectMood(query: string): Mood | null {
+  for (const mood of MOODS) {
+    if (mood.keys.some((k) => query.includes(k))) return mood
+  }
+  return null
+}
+
+function featureDistance(features: Record<string, number>, target: Record<string, number>): number {
+  const keys = Object.keys(target)
+  let sum = 0
+  for (const k of keys) sum += Math.abs((features[k] ?? 0) - target[k])
+  return keys.length ? sum / keys.length : 0
+}
+
+export type DemoAssistantReply = { provider: string; message: string; trackIds: string[]; tracks: any[] }
+
+export function getDemoAssistantReply(prompt: string, messages: { trackIds?: string[] }[] = []): DemoAssistantReply {
+  const query = prompt.toLowerCase()
+  const usedIds = new Set(messages.flatMap((m) => m.trackIds || []))
+
+  // Artist request takes priority.
+  const artist = ARTISTS.find((a) => query.includes(a.name.toLowerCase()))
+  let pool = TRACKS
+  let intro: string
+
+  if (artist) {
+    pool = TRACKS.filter((t) => t.artists[0].id === artist.id)
+    intro = `Here's more from ${artist.name}`
+  } else {
+    const mood = detectMood(query)
+    const wantsPopular = /popular|familiar|hits|classic|safe|known/.test(query)
+    const wantsDiscovery = /new|discover|deep|underrated|different|surprise|obscure|hidden/.test(query)
+
+    let scored = TRACKS.map((t) => {
+      const f = audioFeaturesFor(t.id)
+      let score = mood ? 1 - featureDistance(f, mood.target) : 0.5
+      if (wantsPopular) score += (t.popularity / 100) * 0.5
+      if (wantsDiscovery) score += (1 - t.popularity / 100) * 0.5
+      // Small deterministic jitter keyed to the prompt so repeats vary.
+      score += (rand(`${query}:${t.id}`) - 0.5) * 0.15
+      return { t, score }
+    })
+    scored.sort((a, b) => b.score - a.score)
+    pool = scored.map((s) => s.t)
+
+    if (mood) intro = `For a ${mood.label} mood, try these`
+    else if (wantsPopular) intro = "Here are some crowd-pleasers"
+    else if (wantsDiscovery) intro = "Here are a few off the beaten path"
+    else intro = "Here's a set that fits"
+  }
+
+  // Prefer tracks not already suggested; fall back to the pool if exhausted.
+  const fresh = pool.filter((t) => !usedIds.has(t.id))
+  const picks = (fresh.length >= 3 ? fresh : pool).slice(0, 3)
+
+  if (picks.length === 0) {
+    return { provider: "Demo assistant", message: "I couldn't find a match in the sample library — try a mood like chill, upbeat, happy, or a discovery pick.", trackIds: [], tracks: [] }
+  }
+
+  const list = picks.map((t) => `${t.name} by ${t.artists[0].name}`).join(", ")
+  return {
+    provider: "Demo assistant",
+    message: `${intro}: ${list}. Tap any title to see its audio breakdown, or ask for another vibe.`,
+    trackIds: [],
+    tracks: picks,
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 /* router                                                                   */
 /* ----------------------------------------------------------------------- */
 

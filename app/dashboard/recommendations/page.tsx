@@ -12,6 +12,8 @@ import {
   createPlaylist,
   addTracksToPlaylist,
 } from "@/lib/spotify"
+import { isDemoMode } from "@/lib/demo-mode"
+import { getDemoAssistantReply } from "@/lib/demo-data"
 import { TrackCard } from "@/components/track-card"
 import { TrackDetailModal } from "@/components/track-detail-modal"
 import { Button } from "@/components/ui/button"
@@ -139,6 +141,10 @@ async function getFallbackRecommendations(token: string, artistNames: string[], 
 }
 
 async function getLlmRecommendationReply(prompt: string, tracks: any[], messages: ChatMessage[]) {
+  if (isDemoMode()) {
+    // Guest mode has no LLM backend; use the local mood-aware demo assistant.
+    return getDemoAssistantReply(prompt, messages)
+  }
   const response = await fetch("/api/ai/recommendations", {
     method: "POST",
     headers: {
